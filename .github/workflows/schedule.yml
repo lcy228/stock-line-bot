@@ -1,0 +1,43 @@
+name: stock-bot schedule
+
+on:
+  schedule:
+    - cron: "30 0 * * 1-5"      # 台北 08:30（週一至五）→ 盤前分析
+    - cron: "30 3 * * 1-5"      # 台北 11:30 → 盤中分析
+    - cron: "0 6 * * 1-5"       # 台北 14:00 → 盤後分析
+    - cron: "*/10 0-9 * * 1-5"  # 台北 08:00-18:00 每 10 分鐘 ping 一次，避免 Render 服務休眠
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "手動測試：premarket / midday / afterhours"
+        required: false
+        default: "premarket"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 判斷這次要做什麼
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "slot=${{ github.event.inputs.slot }}" >> "$GITHUB_OUTPUT"
+            echo "mode=trigger" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "${{ github.event.schedule }}" in
+            "30 0 * * 1-5") echo "slot=premarket" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
+            "30 3 * * 1-5") echo "slot=midday" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
+            "0 6 * * 1-5") echo "slot=afterhours" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
+            *) echo "mode=keepalive" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: 觸發分析並推播到 LINE
+        if: steps.pick.outputs.mode == 'trigger'
+        run: |
+          curl -sf -X POST "${{ secrets.RENDER_APP_URL }}/trigger/${{ steps.pick.outputs.slot }}" \
+            -H "X-Trigger-Secret: ${{ secrets.TRIGGER_SECRET }}"
+
+      - name: 喚醒服務（避免休眠）
+        if: steps.pick.outputs.mode == 'keepalive'
+        run: curl -sf "${{ secrets.RENDER_APP_URL }}/health"

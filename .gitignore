@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+static/charts/*.png
+.DS_Store
+.venv/
