@@ -8,7 +8,7 @@
 """
 import os
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -20,6 +20,11 @@ import charts
 import line_service
 
 app = Flask(__name__)
+
+# 給「呼叫 Gemini 但最多只等 N 秒、逾時就放棄」用的共用執行緒池。
+# 不能用 `with ThreadPoolExecutor() as pool`，因為離開 with 區塊時會等所有工作做完，
+# 這樣就算我們判定逾時放棄了，還是會被卡住 —— 用共用池、不 shutdown，才能真正做到「不等它」。
+_AI_POOL = ThreadPoolExecutor(max_workers=2)
 
 TRIGGER_SECRET = os.environ.get("TRIGGER_SECRET", "")
 # Render 會提供這個環境變數告訴你服務對外的網址；本機測試時可以留空。
@@ -73,8 +78,13 @@ def run_session(slot: str):
         raise RuntimeError("抓不到任何股票報價，可能是證交所 API 暫時異常")
     _attach_news(rows)
 
+    # Gemini SDK 本身的重試機制不可靠（逾時設定不保證有效），改成另開執行緒
+    # 硬性等待，時間到就放棄、不等它真正結束，避免拖垮整個請求被 gunicorn 從外部砍斷。
+    future = _AI_POOL.submit(ai_analysis.generate_session_commentary, slot_label, rows)
     try:
-        commentary = ai_analysis.generate_session_commentary(slot_label, rows)
+        commentary = future.result(timeout=25)
+    except FutureTimeoutError:
+        commentary = "（這次 AI 評論來不及產生，可能是額度限流，稍後的時段會恢復正常，先看數據本身參考）"
     except Exception:
         traceback.print_exc()
         commentary = "（這次 AI 評論暫時抓不到，可能是額度限流，稍後的時段會恢復正常，先看數據本身參考）"
@@ -137,7 +147,11 @@ def webhook():
                 rows = _fetch_all([(c, n, "詢問") for c, n in matched])
             else:
                 rows = _fetch_all([(c, n, "持股") for c, n in config.HOLDINGS])
-            answer = ai_analysis.answer_question(user_text, rows)
+            future = _AI_POOL.submit(ai_analysis.answer_question, user_text, rows)
+            try:
+                answer = future.result(timeout=20)
+            except FutureTimeoutError:
+                answer = "現在查詢有點塞車（可能是 AI 額度限流），等一下再問我一次看看"
             line_service.reply_text(reply_token, answer + config.DISCLAIMER)
         except Exception as e:
             traceback.print_exc()
