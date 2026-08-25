@@ -44,6 +44,17 @@ WATCHLIST_SECTORS = {
     ],
 }
 
+# 圖表用的英文分類標題（Render 的 Linux 伺服器沒有中文字型，圖表文字只能用英文，
+# 避免變成空白方框；完整中文名稱一樣會顯示在 LINE 的文字訊息裡）。
+CATEGORY_LABELS_EN = {
+    "持股": "Holdings",
+    "航運": "Shipping",
+    "載板": "IC Substrate",
+    "半導體": "Semiconductor",
+    "電子零組件": "Electronic Components",
+}
+
+
 # 給程式迴圈用的完整清單：(代號, 名稱, 分類)
 def all_tickers():
     items = [(code, name, "持股") for code, name in HOLDINGS]

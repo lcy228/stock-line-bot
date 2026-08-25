@@ -10,7 +10,7 @@ import google.generativeai as genai
 
 # 模型名稱之後如果 Google 改版棄用，去 https://ai.google.dev/gemini-api/docs/models
 # 找一個目前可用的 flash 模型名稱換掉即可，其他程式碼不用動。
-MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 _configured = False
 
