@@ -51,7 +51,8 @@ def generate_session_commentary(slot_label: str, stock_rows: list[dict]) -> str:
 不要加免責聲明，系統會自動附加。"""
 
     model = genai.GenerativeModel(MODEL_NAME)
-    resp = model.generate_content(prompt)
+    # 明確設定逾時，避免免費額度偶爾限流時，SDK 內部重試卡住拖垮整個請求。
+    resp = model.generate_content(prompt, request_options={"timeout": 30})
     return (resp.text or "").strip()
 
 
@@ -77,5 +78,5 @@ def answer_question(user_text: str, context_rows: list[dict]) -> str:
 但可以就你所知的產業背景簡單回應。"""
 
     model = genai.GenerativeModel(MODEL_NAME)
-    resp = model.generate_content(prompt)
+    resp = model.generate_content(prompt, request_options={"timeout": 30})
     return (resp.text or "").strip()

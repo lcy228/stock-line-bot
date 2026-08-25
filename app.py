@@ -73,7 +73,11 @@ def run_session(slot: str):
         raise RuntimeError("抓不到任何股票報價，可能是證交所 API 暫時異常")
     _attach_news(rows)
 
-    commentary = ai_analysis.generate_session_commentary(slot_label, rows)
+    try:
+        commentary = ai_analysis.generate_session_commentary(slot_label, rows)
+    except Exception:
+        traceback.print_exc()
+        commentary = "（這次 AI 評論暫時抓不到，可能是額度限流，稍後的時段會恢復正常，先看數據本身參考）"
 
     lines = [f"📈 {slot_label}\n"]
     for r in sorted(rows, key=lambda x: (x["category"], x["quote"]["code"])):
