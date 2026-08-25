@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>股市戰情室｜{{ slot_label }}</title>
+<style>
+  :root {
+    --paper: #f3f4ef;
+    --card: #fdfdfb;
+    --ink-900: #1b2420;
+    --ink-700: #3f4a44;
+    --ink-500: #6b756e;
+    --border: #dcded4;
+    --border-soft: #e7e8e0;
+    --accent: #96631d;
+    --accent-soft: rgba(150, 99, 29, 0.14);
+    --gain: #c43d2b;
+    --gain-soft: rgba(196, 61, 43, 0.12);
+    --loss: #04886f;
+    --loss-soft: rgba(4, 136, 111, 0.12);
+    --shadow: 0 1px 2px rgba(27, 36, 32, 0.06), 0 8px 24px rgba(27, 36, 32, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121613;
+      --card: #191e1a;
+      --ink-900: #e9ebe4;
+      --ink-700: #b6bcb3;
+      --ink-500: #838d84;
+      --border: #2b322c;
+      --border-soft: #232823;
+      --accent: #d3a75b;
+      --accent-soft: rgba(211, 167, 91, 0.16);
+      --gain: #e2523f;
+      --gain-soft: rgba(226, 82, 63, 0.16);
+      --loss: #14a38c;
+      --loss-soft: rgba(20, 163, 140, 0.16);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink-900);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.7;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+
+  .masthead { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
+  .masthead .eyebrow {
+    font-family: ui-monospace, "SF Mono", monospace;
+    font-size: 12px; letter-spacing: 0.1em; color: var(--accent);
+    text-transform: uppercase; margin: 0 0 8px;
+  }
+  .masthead h1 { font-size: 26px; font-weight: 800; margin: 0 0 6px; }
+  .masthead p { color: var(--ink-500); margin: 0; font-size: 13px; }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--border); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; margin: 20px 0 28px;
+  }
+  .stat { background: var(--card); padding: 12px 10px; text-align: center; }
+  .stat .label { font-size: 11px; color: var(--ink-500); margin-bottom: 4px; }
+  .stat .value { font-size: 17px; font-weight: 700; }
+  .stat .value.gain { color: var(--gain); }
+  .stat .value.loss { color: var(--loss); }
+
+  .commentary {
+    background: var(--accent-soft); border: 1px solid var(--border-soft);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 32px;
+    font-size: 14.5px; color: var(--ink-700);
+  }
+  .commentary .tag {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin-bottom: 8px; display: block;
+  }
+
+  section.group { margin-bottom: 28px; }
+  section.group h2 {
+    font-size: 14px; font-weight: 700; margin: 0 0 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border-soft);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  table td { padding: 8px 4px; border-bottom: 1px solid var(--border-soft); font-size: 14px; vertical-align: baseline; }
+  table tr:last-child td { border-bottom: none; }
+  td.code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink-500); width: 64px; }
+  td.name { color: var(--ink-900); }
+  td.price { text-align: right; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
+  td.change { text-align: right; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; font-weight: 600; width: 76px; }
+  td.change.gain { color: var(--gain); }
+  td.change.loss { color: var(--loss); }
+  td.trend { text-align: right; font-size: 12px; color: var(--ink-500); white-space: nowrap; }
+
+  .news { margin-top: 28px; }
+  .news h2 { font-size: 14px; font-weight: 700; margin: 0 0 10px; }
+  .news ul { margin: 0; padding-left: 18px; }
+  .news li { font-size: 13.5px; margin-bottom: 6px; }
+  .news a { color: var(--ink-700); }
+
+  footer {
+    margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--ink-500);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <p class="eyebrow">股市戰情室</p>
+    <h1>{{ slot_label }}</h1>
+    <p class="mono">產生時間 {{ generated_at }}（台北時間）</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="label">追蹤檔數</div>
+      <div class="value">{{ stats.total }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">上漲</div>
+      <div class="value gain">{{ stats.gainers }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">下跌</div>
+      <div class="value loss">{{ stats.losers }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">平均漲跌幅</div>
+      <div class="value {{ 'gain' if stats.avg_change >= 0 else 'loss' }}">{{ "%+.2f"|format(stats.avg_change) }}%</div>
+    </div>
+  </div>
+
+  <div class="commentary">
+    <span class="tag">AI 觀察</span>
+    {{ commentary }}
+  </div>
+
+  {% for cat, rows in groups.items() %}
+  <section class="group">
+    <h2>{{ cat }}</h2>
+    <table>
+      {% for r in rows %}
+      {% set q = r.quote %}
+      {% set ind = r.indicators %}
+      <tr>
+        <td class="code">{{ q.code }}</td>
+        <td class="name">{{ q.name }}</td>
+        <td class="price">{{ q.price }}</td>
+        <td class="change {{ 'gain' if q.change_pct >= 0 else 'loss' }}">{{ "%+.2f"|format(q.change_pct) }}%</td>
+        <td class="trend">{{ ind.trend }}{% if ind.rsi14 %} · RSI {{ ind.rsi14 }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% endfor %}
+
+  {% if top_movers %}
+  <div class="news">
+    <h2>相關新聞</h2>
+    <ul>
+      {% for r in top_movers %}
+        {% for n in r.news %}
+        <li><strong>{{ r.quote.code }} {{ r.quote.name }}</strong>：<a href="{{ n.link }}" target="_blank" rel="noopener">{{ n.title }}</a></li>
+        {% endfor %}
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <footer>{{ disclaimer }}</footer>
+
+</div>
+</body>
+</html>
