@@ -32,10 +32,25 @@ jobs:
             *) echo "mode=keepalive" >> "$GITHUB_OUTPUT" ;;
           esac
 
+      - name: 先確認伺服器已醒來（免費方案休眠喚醒要留時間，避免跟分析請求疊在一起逾時）
+        if: steps.pick.outputs.mode == 'trigger'
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 15 "${{ secrets.RENDER_APP_URL }}/health" || echo "000")
+            echo "第 $i 次檢查，狀態碼：$code"
+            if [ "$code" = "200" ]; then
+              echo "伺服器已就緒"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "等待伺服器醒來逾時"
+          exit 1
+
       - name: 觸發分析並推播到 LINE
         if: steps.pick.outputs.mode == 'trigger'
         run: |
-          curl -sf -X POST "${{ secrets.RENDER_APP_URL }}/trigger/${{ steps.pick.outputs.slot }}" \
+          curl -sf -m 150 -X POST "${{ secrets.RENDER_APP_URL }}/trigger/${{ steps.pick.outputs.slot }}" \
             -H "X-Trigger-Secret: ${{ secrets.TRIGGER_SECRET }}"
 
       - name: 喚醒服務（避免休眠）
