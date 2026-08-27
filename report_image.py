@@ -83,7 +83,10 @@ def generate_report_image(slot_label: str, generated_at: str, rows: list[dict], 
     for r in sorted(rows, key=lambda x: (x["category"], x["quote"]["code"])):
         groups.setdefault(r["category"], []).append(r)
 
-    commentary_lines = _wrap(md, commentary, f_body, content_w - 24)
+    # PIL 的 textlength() 不支援含換行的字串，AI 生成的評論可能自己帶換行，
+    # 先把所有空白（含換行）normalize 成單一空格，換行完全交給下面的 _wrap 自己處理。
+    commentary_flat = " ".join(commentary.split())
+    commentary_lines = _wrap(md, commentary_flat, f_body, content_w - 24)
 
     # ---- 第一遍：只算高度，不實際畫 ----
     y = PAD
