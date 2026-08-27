@@ -46,7 +46,14 @@ def _fetch_one(code, name, category):
         return None
     history = stock_data.get_daily_history(code, months_back=1)
     indicators = stock_data.compute_indicators(history)
-    return {"quote": quote, "indicators": indicators, "category": category, "news": []}
+    holding = None
+    cost_basis = config.get_cost_basis(code)
+    if cost_basis:
+        shares, cost = cost_basis
+        pl_amount = (quote["price"] - cost) * shares
+        pl_pct = (quote["price"] - cost) / cost * 100 if cost else 0.0
+        holding = {"shares": shares, "cost": cost, "pl_amount": pl_amount, "pl_pct": pl_pct}
+    return {"quote": quote, "indicators": indicators, "category": category, "news": [], "holding": holding}
 
 
 def _fetch_all(tickers):
@@ -157,7 +164,7 @@ def webhook():
             if matched:
                 rows = _fetch_all([(c, n, "詢問") for c, n in matched])
             else:
-                rows = _fetch_all([(c, n, "持股") for c, n in config.HOLDINGS])
+                rows = _fetch_all([(c, n, "持股") for c, n in config.HOLDING_CODES_NAMES])
             future = _AI_POOL.submit(ai_analysis.answer_question, user_text, rows)
             try:
                 answer = future.result(timeout=20)

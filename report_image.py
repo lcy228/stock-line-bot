@@ -96,8 +96,9 @@ def generate_report_image(slot_label: str, generated_at: str, rows: list[dict], 
     y += 78 + 20      # stat strip + gap
     y += 20 + len(commentary_lines) * 22 + 16 + 24  # commentary box + gap
     row_h = 34
+    row_h_holding = 50  # 有成本價的持股多一行顯示損益，列高多留一點
     for cat, cat_rows in groups.items():
-        y += 28 + len(cat_rows) * row_h + 16
+        y += 28 + sum(row_h_holding if r["holding"] else row_h for r in cat_rows) + 16
     # 字型沒有涵蓋 emoji，圖片版本的免責聲明拿掉開頭的警告符號，避免變成空白方框
     disclaimer_text = config.DISCLAIMER.strip().lstrip("⚠️ ")
     footer_lines = _wrap(md, disclaimer_text, f_footer, content_w)
@@ -151,7 +152,8 @@ def generate_report_image(slot_label: str, generated_at: str, rows: list[dict], 
         draw.text((PAD, y), cat, font=f_cat, fill=INK_900)
         y += 28
         for r in cat_rows:
-            q, ind = r["quote"], r["indicators"]
+            q, ind, holding = r["quote"], r["indicators"], r["holding"]
+            this_row_h = row_h_holding if holding else row_h
             row_top = y
             draw.text((PAD, row_top), q["code"], font=f_row_mono, fill=INK_500)
             draw.text((PAD + 70, row_top), q["name"], font=f_row, fill=INK_900)
@@ -165,8 +167,16 @@ def generate_report_image(slot_label: str, generated_at: str, rows: list[dict], 
             trend_text = ind.get("trend", "")
             tw = md.textlength(trend_text, font=f_footer)
             draw.text((PAD + content_w - 170 - pw - 16 - tw, row_top + 2), trend_text, font=f_footer, fill=INK_500)
-            draw.line([(PAD, y + row_h - 6), (PAD + content_w, y + row_h - 6)], fill=BORDER, width=1)
-            y += row_h
+            if holding:
+                # 有成本價的持股，多畫一行顯示相對自己成本的真實損益（比當天漲跌%更有意義）
+                pl_color = GAIN if holding["pl_amount"] >= 0 else LOSS
+                pl_text = (
+                    f"成本 {holding['cost']}｜損益 {holding['pl_amount']:+,.0f} 元"
+                    f"（{holding['pl_pct']:+.1f}%）"
+                )
+                draw.text((PAD + 70, row_top + 22), pl_text, font=f_footer, fill=pl_color)
+            draw.line([(PAD, y + this_row_h - 6), (PAD + content_w, y + this_row_h - 6)], fill=BORDER, width=1)
+            y += this_row_h
         y += 16
 
     # 免責聲明

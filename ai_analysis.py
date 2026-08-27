@@ -31,22 +31,27 @@ def generate_session_commentary(slot_label: str, stock_rows: list[dict]) -> str:
         q = r["quote"]
         ind = r["indicators"]
         news_titles = "；".join(n["title"] for n in r["news"][:2])
+        holding_note = ""
+        if r["holding"]:
+            h = r["holding"]
+            holding_note = f"，你的成本 {h['cost']}（目前損益 {h['pl_pct']:+.1f}%）"
         lines.append(
             f"{r['category']} {q['code']} {q['name']}：現價 {q['price']}"
             f"（{q['change_pct']:+.2f}%），{ind['trend']}，"
-            f"RSI14={ind['rsi14']}，相關新聞：{news_titles or '無'}"
+            f"RSI14={ind['rsi14']}{holding_note}，相關新聞：{news_titles or '無'}"
         )
     data_block = "\n".join(lines)
 
     prompt = f"""你是一位謹慎的台股助理，正在幫使用者做「{slot_label}」的整理。
-以下是使用者追蹤股票的即時數據與新聞標題：
+以下是使用者追蹤股票的即時數據，有標「你的成本」的是他實際持有的部位：
 
 {data_block}
 
 請用繁體中文寫一段簡短的整體評論（150～250 字），包含：
 1. 大盤氛圍與資金流向的簡單觀察（根據上面數據推測即可，不用假裝有额外資訊）
-2. 挑出 2～3 檔波動較明顯或有新聞題材的股票，簡短說明原因
-3. 用「參考觀察」的語氣提一下這個時段可以留意的價位或訊號，不要用「建議買進」「保證」這類字眼
+2. 挑出 2～3 檔波動較明顯、有新聞題材、或現價明顯偏離自己成本的股票，簡短說明原因
+3. 對有標成本的持股，可以用「參考觀察」的語氣提一下現價相對成本的位置算不算加碼／減碼的合理區間
+   （例如季線、月線附近，或距離成本仍有安全邊際），不要用「建議買進」「保證」這類字眼
 4. 語氣自然、像朋友在聊股票，不要用條列式，不要重複數據本身（數據使用者已經看得到）
 不要加免責聲明，系統會自動附加。"""
 
@@ -62,7 +67,11 @@ def answer_question(user_text: str, context_rows: list[dict]) -> str:
     lines = []
     for r in context_rows:
         q = r["quote"]
-        lines.append(f"{q['code']} {q['name']}：現價 {q['price']}（{q['change_pct']:+.2f}%）")
+        holding_note = ""
+        if r["holding"]:
+            h = r["holding"]
+            holding_note = f"，你的成本 {h['cost']}（損益 {h['pl_pct']:+.1f}%）"
+        lines.append(f"{q['code']} {q['name']}：現價 {q['price']}（{q['change_pct']:+.2f}%）{holding_note}")
     data_block = "\n".join(lines) if lines else "（目前沒有抓到即時報價資料）"
 
     prompt = f"""你是使用者的台股助理，個性像朋友、講話白話不生硬。
