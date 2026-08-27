@@ -8,26 +8,22 @@
 """
 import os
 import traceback
-import uuid
-from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone, timedelta
 
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory
 
 import config
 import stock_data
 import news
 import ai_analysis
 import charts
+import report_image
 import line_service
 
 app = Flask(__name__)
 
 TAIPEI_TZ = timezone(timedelta(hours=8))
-
-REPORT_DIR = os.path.join(os.path.dirname(__file__), "static", "reports")
-os.makedirs(REPORT_DIR, exist_ok=True)
 
 # 給「呼叫 Gemini 但最多只等 N 秒、逾時就放棄」用的共用執行緒池。
 # 不能用 `with ThreadPoolExecutor() as pool`，因為離開 with 區塊時會等所有工作做完，
@@ -79,35 +75,6 @@ def _attach_news(rows, top_n=3):
             r["news"] = fut.result()
 
 
-def generate_report(slot_label: str, rows: list, commentary: str) -> str:
-    """畫一份排版好看的網頁報告（風格參考「股市戰情室」），存成 HTML，回傳檔名。"""
-    total = len(rows)
-    gainers = sum(1 for r in rows if r["quote"]["change_pct"] > 0)
-    losers = sum(1 for r in rows if r["quote"]["change_pct"] < 0)
-    avg_change = (sum(r["quote"]["change_pct"] for r in rows) / total) if total else 0.0
-
-    groups = OrderedDict()
-    for r in sorted(rows, key=lambda x: (x["category"], x["quote"]["code"])):
-        groups.setdefault(r["category"], []).append(r)
-
-    top_movers = sorted(rows, key=lambda r: abs(r["quote"]["change_pct"]), reverse=True)[:3]
-
-    html = render_template(
-        "report.html",
-        slot_label=slot_label,
-        generated_at=datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M"),
-        stats={"total": total, "gainers": gainers, "losers": losers, "avg_change": avg_change},
-        groups=groups,
-        commentary=commentary,
-        top_movers=top_movers,
-        disclaimer=config.DISCLAIMER.strip(),
-    )
-    filename = f"{uuid.uuid4().hex}.html"
-    with open(os.path.join(REPORT_DIR, filename), "w", encoding="utf-8") as f:
-        f.write(html)
-    return filename
-
-
 def run_session(slot: str):
     slot_label = config.SCHEDULE_SLOTS.get(slot, slot)
     rows = _fetch_all(config.all_tickers())
@@ -126,23 +93,25 @@ def run_session(slot: str):
         traceback.print_exc()
         commentary = "（這次 AI 評論暫時抓不到，可能是額度限流，稍後的時段會恢復正常，先看數據本身參考）"
 
-    report_filename = generate_report(slot_label, rows, commentary)
-    report_url = f"{PUBLIC_BASE_URL.rstrip('/')}/static/reports/{report_filename}" if PUBLIC_BASE_URL else None
-
     lines = [f"📈 {slot_label}\n"]
-    if report_url:
-        lines.append(f"📄 完整報告：{report_url}\n")
     for r in sorted(rows, key=lambda x: (x["category"], x["quote"]["code"])):
         q = r["quote"]
         lines.append(f"[{r['category']}] {q['code']} {q['name']} {q['price']}（{q['change_pct']:+.2f}%）")
     text = "\n".join(lines) + "\n\n" + commentary + config.DISCLAIMER
 
+    generated_at = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
+    report_filename = report_image.generate_report_image(slot_label, generated_at, rows, commentary)
     chart_filename = charts.generate_change_chart(rows, f"{slot} change %")
-    image_url = None
-    if PUBLIC_BASE_URL:
-        image_url = f"{PUBLIC_BASE_URL.rstrip('/')}/charts/{chart_filename}"
 
-    line_service.broadcast_text_and_image(text, image_url)
+    image_urls = []
+    if PUBLIC_BASE_URL:
+        base = PUBLIC_BASE_URL.rstrip("/")
+        image_urls = [
+            f"{base}/static/report_images/{report_filename}",
+            f"{base}/charts/{chart_filename}",
+        ]
+
+    line_service.broadcast_text_and_image(text, image_urls)
 
 
 @app.post("/trigger/<slot>")

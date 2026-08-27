@@ -2,6 +2,6 @@
 __pycache__/
 *.pyc
 static/charts/*.png
-static/reports/*.html
+static/report_images/*.png
 .DS_Store
 .venv/

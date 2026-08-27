@@ -34,14 +34,16 @@ def _headers():
     }
 
 
-def broadcast_text_and_image(text: str, image_url: str | None = None):
-    """廣播給這個官方帳號的所有好友（也就是你自己），不用另外儲存 userId。"""
+def broadcast_text_and_image(text: str, image_urls=None):
+    """廣播給這個官方帳號的所有好友（也就是你自己），不用另外儲存 userId。
+    image_urls 可以放多張圖（例如報告卡片 + 漲跌幅圖表），LINE 一次最多 5 則訊息，
+    這裡文字算 1 則，圖片最多再放 4 張。"""
     messages = [{"type": "text", "text": text[:4900]}]
-    if image_url:
+    for url in (image_urls or [])[:4]:
         messages.append({
             "type": "image",
-            "originalContentUrl": image_url,
-            "previewImageUrl": image_url,
+            "originalContentUrl": url,
+            "previewImageUrl": url,
         })
     resp = requests.post(
         f"{API_BASE}/message/broadcast",
