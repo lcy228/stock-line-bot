@@ -1,17 +1,20 @@
-name: stock-bot schedule
+name: stock-bot keepalive
 
+# 盤前/盤中/盤後的自動推播已經關閉（改成 LINE 聊天室打股票代號即時查詢）。
+# 這個 workflow 現在只做兩件事：
+# 1. 平日白天每 10 分鐘 ping 一次，讓 Render 免費方案不要休眠，
+#    這樣你在 LINE 問股票時才不用先等 40~50 秒的冷啟動喚醒時間。
+# 2. 保留 workflow_dispatch 手動觸發選項，之後如果想手動補推一次整批分析，
+#    還是可以人工跑一次（平常不會自動執行）。
 on:
   schedule:
-    - cron: "30 0 * * 1-5"      # 台北 08:30（週一至五）→ 盤前分析
-    - cron: "30 3 * * 1-5"      # 台北 11:30 → 盤中分析
-    - cron: "0 6 * * 1-5"       # 台北 14:00 → 盤後分析
-    - cron: "*/10 0-9 * * 1-5"  # 台北 08:00-18:00 每 10 分鐘 ping 一次，避免 Render 服務休眠
+    - cron: "*/10 0-9 * * 1-5"  # 台北 08:00-18:00 每 10 分鐘 ping 一次
   workflow_dispatch:
     inputs:
       slot:
-        description: "手動測試：premarket / midday / afterhours"
+        description: "選填，手動補推播用：premarket / midday / afterhours，留空只是喚醒服務"
         required: false
-        default: "premarket"
+        default: ""
 
 jobs:
   run:
@@ -20,19 +23,14 @@ jobs:
       - name: 判斷這次要做什麼
         id: pick
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.slot }}" ]; then
             echo "slot=${{ github.event.inputs.slot }}" >> "$GITHUB_OUTPUT"
             echo "mode=trigger" >> "$GITHUB_OUTPUT"
-            exit 0
+          else
+            echo "mode=keepalive" >> "$GITHUB_OUTPUT"
           fi
-          case "${{ github.event.schedule }}" in
-            "30 0 * * 1-5") echo "slot=premarket" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
-            "30 3 * * 1-5") echo "slot=midday" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
-            "0 6 * * 1-5") echo "slot=afterhours" >> "$GITHUB_OUTPUT"; echo "mode=trigger" >> "$GITHUB_OUTPUT" ;;
-            *) echo "mode=keepalive" >> "$GITHUB_OUTPUT" ;;
-          esac
 
-      - name: 先確認伺服器已醒來（免費方案休眠喚醒要留時間，避免跟分析請求疊在一起逾時）
+      - name: 先確認伺服器已醒來（手動觸發時才需要，keep-alive 本身就是在喚醒）
         if: steps.pick.outputs.mode == 'trigger'
         run: |
           for i in $(seq 1 20); do
@@ -47,12 +45,12 @@ jobs:
           echo "等待伺服器醒來逾時"
           exit 1
 
-      - name: 觸發分析並推播到 LINE
+      - name: 手動觸發分析並推播到 LINE
         if: steps.pick.outputs.mode == 'trigger'
         run: |
           curl -sf -m 150 -X POST "${{ secrets.RENDER_APP_URL }}/trigger/${{ steps.pick.outputs.slot }}" \
             -H "X-Trigger-Secret: ${{ secrets.TRIGGER_SECRET }}"
 
-      - name: 喚醒服務（避免休眠）
+      - name: 喚醒服務（避免休眠，這樣你在 LINE 問股票時才不用等冷啟動）
         if: steps.pick.outputs.mode == 'keepalive'
         run: curl -sf "${{ secrets.RENDER_APP_URL }}/health"

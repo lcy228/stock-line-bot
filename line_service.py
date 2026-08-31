@@ -62,3 +62,19 @@ def reply_text(reply_token: str, text: str):
         timeout=15,
     )
     resp.raise_for_status()
+
+
+def reply_text_and_image(reply_token: str, text: str, image_url: str):
+    """聊天室即時查詢個股用：回覆一則文字＋一張報告卡片圖（用 reply 不是
+    broadcast，這樣完全免費、不限次數，也只有問的人自己看得到）。"""
+    messages = [
+        {"type": "text", "text": text[:4900]},
+        {"type": "image", "originalContentUrl": image_url, "previewImageUrl": image_url},
+    ]
+    resp = requests.post(
+        f"{API_BASE}/message/reply",
+        headers=_headers(),
+        json={"replyToken": reply_token, "messages": messages},
+        timeout=15,
+    )
+    resp.raise_for_status()

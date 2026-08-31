@@ -140,6 +140,8 @@ def _draw_rangebar(draw, md, f, x, y, w, notes, price):
 
 
 def _draw_holding_card(draw, md, f, x, y, content_w, code, name, quote, holding, notes):
+    """holding 可以是 None（例如聊天室即時查詢、沒有持股成本可以算損益的情況），
+    這時候就不畫右上角的損益徽章，其他版面完全一樣。"""
     top = y
     draw.text((x, top), code, font=f.card_ticker, fill=INK_500)
     name_x = x + 62
@@ -148,10 +150,11 @@ def _draw_holding_card(draw, md, f, x, y, content_w, code, name, quote, holding,
     tag_x = name_x + name_w + 10
     draw.text((tag_x, top + 1), notes["tag"], font=f.card_tag, fill=INK_500)
 
-    pl_color = GAIN if holding["pl_amount"] >= 0 else LOSS
-    badge_text = f"{holding['pl_amount']:+,.0f} 元　{holding['pl_pct']:+.1f}%"
-    bw = md.textlength(badge_text, font=f.card_badge)
-    draw.text((x + content_w - bw, top), badge_text, font=f.card_badge, fill=pl_color)
+    if holding is not None:
+        pl_color = GAIN if holding["pl_amount"] >= 0 else LOSS
+        badge_text = f"{holding['pl_amount']:+,.0f} 元　{holding['pl_pct']:+.1f}%"
+        bw = md.textlength(badge_text, font=f.card_badge)
+        draw.text((x + content_w - bw, top), badge_text, font=f.card_badge, fill=pl_color)
 
     y = top + 26
     _draw_rangebar(draw, md, f, x, y, content_w, notes, quote["price"])
@@ -313,6 +316,73 @@ def generate_report_image(slot_label: str, generated_at: str, rows: list[dict], 
         y += 16
 
     # 免責聲明
+    for line in footer_lines:
+        draw.text((PAD, y), line, font=f.footer, fill=INK_500)
+        y += 16
+
+    filename = f"{uuid.uuid4().hex}.png"
+    img.save(os.path.join(IMG_DIR, filename), "PNG")
+    return filename
+
+
+def generate_single_stock_image(code: str, name: str, quote: dict, notes: dict, generated_at: str) -> str:
+    """聊天室打股票代碼／名稱即時查詢時用：畫一張單一個股的深度分析卡片圖，
+    版面跟持股卡片（_draw_holding_card）完全一樣，只是沒有損益徽章
+    （這種即時查詢沒有你的成本價可以算損益）。notes 來自
+    ai_analysis.deep_dive_report() 即時查證的結果，不是 stock_notes.py 裡
+    固定的筆記。"""
+    f = _Fonts()
+    measure_img = Image.new("RGB", (10, 10))
+    md = ImageDraw.Draw(measure_img)
+    content_w = WIDTH - 2 * PAD
+
+    # ---- 第一遍：只算高度 ----
+    y = PAD
+    y += 20 + 8   # eyebrow
+    y += 38 + 6   # title
+    y += 20 + 20  # subtitle + gap
+    stat_h = 78
+    y += stat_h + 20
+    y += _holding_card_height(md, f, notes, content_w)
+    disclaimer_text = config.DISCLAIMER.strip().lstrip("⚠️ ")
+    footer_lines = _wrap(md, disclaimer_text, f.footer, content_w)
+    y += 16 + len(footer_lines) * 16 + PAD
+    height = y
+
+    img = Image.new("RGB", (WIDTH, height), PAPER)
+    draw = ImageDraw.Draw(img)
+
+    y = PAD
+    draw.text((PAD, y), "個股戰情室・即時查詢", font=f.eyebrow, fill=ACCENT)
+    y += 20 + 8
+    draw.text((PAD, y), f"{code}　{name}", font=f.title, fill=INK_900)
+    y += 38 + 6
+    draw.text((PAD, y), f"查詢時間 {generated_at}（台北時間）・AI 即時搜尋整理", font=f.subtitle, fill=INK_500)
+    y += 20 + 20
+
+    # 統計條：現價／今日漲跌／區間下緣／區間上緣
+    stat_w = content_w / 4
+    change_color = GAIN if quote["change_pct"] >= 0 else LOSS
+    range_low, range_high = notes["range"]
+    stats = [
+        ("現價", f"{quote['price']:g}", INK_900),
+        ("今日漲跌", f"{quote['change_pct']:+.2f}%", change_color),
+        ("區間下緣", f"{range_low:g}", INK_500),
+        ("區間上緣", f"{range_high:g}", INK_500),
+    ]
+    draw.rounded_rectangle([PAD, y, PAD + content_w, y + stat_h], radius=10, fill=CARD, outline=BORDER)
+    for i, (label, value, color) in enumerate(stats):
+        cx = PAD + stat_w * i
+        if i > 0:
+            draw.line([(cx, y + 12), (cx, y + stat_h - 12)], fill=BORDER, width=1)
+        lw = md.textlength(label, font=f.stat_label)
+        draw.text((cx + stat_w / 2 - lw / 2, y + 16), label, font=f.stat_label, fill=INK_500)
+        vw = md.textlength(value, font=f.stat_value)
+        draw.text((cx + stat_w / 2 - vw / 2, y + 40), value, font=f.stat_value, fill=color)
+    y += stat_h + 20
+
+    y += _draw_holding_card(draw, md, f, PAD, y, content_w, code, name, quote, None, notes)
+
     for line in footer_lines:
         draw.text((PAD, y), line, font=f.footer, fill=INK_500)
         y += 16

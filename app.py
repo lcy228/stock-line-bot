@@ -2,8 +2,11 @@
 """
 主程式：
 - GET  /health              給 keep-alive / 健康檢查用
-- POST /trigger/<slot>      給 GitHub Actions 排程呼叫，觸發一次分析並廣播到 LINE
-- POST /webhook             LINE 官方帳號的 Webhook，處理你在聊天室問的問題
+- POST /trigger/<slot>      手動觸發整批分析並廣播到 LINE（原本的盤前/盤中/盤後排程
+                             已經關閉，這個路由保留給之後想手動補推播時用，平常不會自動跑）
+- POST /webhook             LINE 官方帳號的 Webhook：你在聊天室打股票代號或名稱，
+                             就即時查報價、用 Gemini + Google 搜尋做深度分析，
+                             回一張跟「股市戰情室」一樣風格的報告卡片圖
 - GET  /charts/<filename>   讓 LINE 抓取產生好的圖表圖片
 """
 import os
@@ -138,12 +141,54 @@ def serve_chart(filename):
     return send_from_directory(charts.CHART_DIR, filename)
 
 
-def _match_tickers(text: str):
-    matched = []
-    for code, name, _cat in config.all_tickers():
-        if code in text or name in text:
-            matched.append((code, name))
-    return matched
+def _handle_query(reply_token: str, user_text: str):
+    """聊天室收到一句話：先解析成股票代號，查即時報價，再用 Gemini + 即時搜尋
+    做深度分析，畫成跟「股市戰情室」一樣的卡片圖回覆。不限於原本追蹤的清單，
+    任何上市櫃股票代號或名稱都可以查。"""
+    resolve_future = _AI_POOL.submit(ai_analysis.resolve_ticker_code, user_text)
+    try:
+        code = resolve_future.result(timeout=10)
+    except FutureTimeoutError:
+        line_service.reply_text(reply_token, "現在有點塞車（可能是 AI 額度限流），等一下再問我一次看看")
+        return
+
+    if not code:
+        line_service.reply_text(
+            reply_token,
+            "打股票代碼（例如 2330）或公司名稱給我，我幫你即時查財報和最新新聞、畫一份分析報告給你。",
+        )
+        return
+
+    quote = stock_data.get_realtime_quote(code)
+    if not quote:
+        line_service.reply_text(reply_token, f"查不到「{code}」的即時報價，確認一下代號是不是打對了？")
+        return
+
+    # 這一步要即時上網搜尋＋整理，比一般問答慢，給多一點等待時間；
+    # 逾時就老實說查詢逾時，不要讓整個 webhook 卡死。
+    deep_future = _AI_POOL.submit(ai_analysis.deep_dive_report, code, quote["name"], quote)
+    try:
+        notes = deep_future.result(timeout=45)
+    except FutureTimeoutError:
+        notes = None
+
+    if not notes:
+        line_service.reply_text(
+            reply_token,
+            f"{code} {quote['name']}　現價 {quote['price']}（{quote['change_pct']:+.2f}%）\n"
+            "這次即時分析查詢逾時或資料格式異常，稍後再問我一次看看。" + config.DISCLAIMER,
+        )
+        return
+
+    generated_at = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
+    filename = report_image.generate_single_stock_image(code, quote["name"], quote, notes, generated_at)
+    text = f"📊 {code} {quote['name']}　現價 {quote['price']}（{quote['change_pct']:+.2f}%）"
+
+    if PUBLIC_BASE_URL:
+        image_url = f"{PUBLIC_BASE_URL.rstrip('/')}/static/report_images/{filename}"
+        line_service.reply_text_and_image(reply_token, text, image_url)
+    else:
+        line_service.reply_text(reply_token, text + "\n（尚未設定 PUBLIC_BASE_URL，暫時無法顯示圖片，先看文字數據）")
 
 
 @app.post("/webhook")
@@ -160,17 +205,7 @@ def webhook():
         reply_token = event.get("replyToken")
         user_text = event["message"]["text"]
         try:
-            matched = _match_tickers(user_text)
-            if matched:
-                rows = _fetch_all([(c, n, "詢問") for c, n in matched])
-            else:
-                rows = _fetch_all([(c, n, "持股") for c, n in config.HOLDING_CODES_NAMES])
-            future = _AI_POOL.submit(ai_analysis.answer_question, user_text, rows)
-            try:
-                answer = future.result(timeout=20)
-            except FutureTimeoutError:
-                answer = "現在查詢有點塞車（可能是 AI 額度限流），等一下再問我一次看看"
-            line_service.reply_text(reply_token, answer + config.DISCLAIMER)
+            _handle_query(reply_token, user_text)
         except Exception as e:
             traceback.print_exc()
             if reply_token:

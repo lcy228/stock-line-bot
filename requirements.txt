@@ -3,4 +3,4 @@ gunicorn==22.0.0
 requests==2.32.3
 matplotlib==3.9.2
 Pillow==10.4.0
-google-generativeai==0.8.3
+google-genai==1.47.0
