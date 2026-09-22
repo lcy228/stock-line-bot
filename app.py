@@ -5,8 +5,8 @@
 - POST /trigger/<slot>      手動觸發整批分析並廣播到 LINE（原本的盤前/盤中/盤後排程
                              已經關閉，這個路由保留給之後想手動補推播時用，平常不會自動跑）
 - POST /webhook             LINE 官方帳號的 Webhook：你在聊天室打股票代號或名稱，
-                             就即時查報價、用 Gemini + Google 搜尋做深度分析，
-                             回一張跟「股市戰情室」一樣風格的報告卡片圖
+                             就查即時股價、三大法人買賣超、最近新聞，簡短回覆文字，
+                             附上一張近三月走勢圖（資料都來自公開 API，不靠 AI 現場查證）
 - GET  /charts/<filename>   讓 LINE 抓取產生好的圖表圖片
 """
 import os
@@ -142,9 +142,10 @@ def serve_chart(filename):
 
 
 def _handle_query(reply_token: str, user_text: str):
-    """聊天室收到一句話：先解析成股票代號，查即時報價，再用 Gemini + 即時搜尋
-    做深度分析，畫成跟「股市戰情室」一樣的卡片圖回覆。不限於原本追蹤的清單，
-    任何上市櫃股票代號或名稱都可以查。"""
+    """聊天室收到一句話：先解析成股票代號，查即時報價，再平行抓三大法人買賣超、
+    近三月日線、最近新聞，回一則簡短文字＋一張走勢圖。不限於原本追蹤的清單，
+    任何上市櫃股票代號或名稱都可以查。全部是真實公開資料源，不靠 AI 現場查證，
+    只有「代號/名稱怎麼對應」這一步會用到 Gemini（快、不用等即時搜尋）。"""
     resolve_future = _AI_POOL.submit(ai_analysis.resolve_ticker_code, user_text)
     try:
         code = resolve_future.result(timeout=10)
@@ -155,7 +156,7 @@ def _handle_query(reply_token: str, user_text: str):
     if not code:
         line_service.reply_text(
             reply_token,
-            "打股票代碼（例如 2330）或公司名稱給我，我幫你即時查財報和最新新聞、畫一份分析報告給你。",
+            "打股票代碼（例如 2330）或公司名稱給我，我幫你查即時股價、外資買賣超、最近新聞，附上走勢圖。",
         )
         return
 
@@ -164,31 +165,40 @@ def _handle_query(reply_token: str, user_text: str):
         line_service.reply_text(reply_token, f"查不到「{code}」的即時報價，確認一下代號是不是打對了？")
         return
 
-    # 這一步要即時上網搜尋＋整理，比一般問答慢，給多一點等待時間；
-    # 逾時就老實說查詢逾時，不要讓整個 webhook 卡死。
-    deep_future = _AI_POOL.submit(ai_analysis.deep_dive_report, code, quote["name"], quote)
-    try:
-        notes = deep_future.result(timeout=45)
-    except FutureTimeoutError:
-        notes = None
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        inst_future = pool.submit(stock_data.get_institutional_trading, code)
+        history_future = pool.submit(stock_data.get_daily_history, code, 2)
+        news_future = pool.submit(news.get_headlines, f"{code} {quote['name']}", 2)
+        inst = inst_future.result()
+        history = history_future.result()
+        headlines = news_future.result()
 
-    if not notes:
-        line_service.reply_text(
-            reply_token,
-            f"{code} {quote['name']}　現價 {quote['price']}（{quote['change_pct']:+.2f}%）\n"
-            "這次即時分析查詢逾時或資料格式異常，稍後再問我一次看看。" + config.DISCLAIMER,
-        )
-        return
+    lines = [f"📊 {code} {quote['name']}", f"現價 {quote['price']:g}（{quote['change_pct']:+.2f}%）"]
+    if inst:
+        foreign_lots = inst["foreign_net"] / 1000
+        total_lots = inst["total_net"] / 1000
+        lines.append(f"外資買賣超 {foreign_lots:+,.0f} 張（{inst['date']}）")
+        lines.append(f"三大法人合計 {total_lots:+,.0f} 張")
+    else:
+        lines.append("外資買賣超：查無最新資料")
 
-    generated_at = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M")
-    filename = report_image.generate_single_stock_image(code, quote["name"], quote, notes, generated_at)
-    text = f"📊 {code} {quote['name']}　現價 {quote['price']}（{quote['change_pct']:+.2f}%）"
+    if headlines:
+        lines.append("")
+        lines.append("📰 最近新聞")
+        for h in headlines:
+            lines.append(f"・{h['title']}")
 
-    if PUBLIC_BASE_URL:
-        image_url = f"{PUBLIC_BASE_URL.rstrip('/')}/static/report_images/{filename}"
+    lines.append("")
+    lines.append("（資料為即時查詢，僅供參考）")
+    text = "\n".join(lines)
+
+    chart_filename = charts.generate_price_trend_chart(code, quote["name"], history, quote)
+
+    if chart_filename and PUBLIC_BASE_URL:
+        image_url = f"{PUBLIC_BASE_URL.rstrip('/')}/charts/{chart_filename}"
         line_service.reply_text_and_image(reply_token, text, image_url)
     else:
-        line_service.reply_text(reply_token, text + "\n（尚未設定 PUBLIC_BASE_URL，暫時無法顯示圖片，先看文字數據）")
+        line_service.reply_text(reply_token, text)
 
 
 @app.post("/webhook")
