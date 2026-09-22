@@ -167,7 +167,7 @@ def _handle_query(reply_token: str, user_text: str):
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         inst_future = pool.submit(stock_data.get_institutional_trading, code)
-        history_future = pool.submit(stock_data.get_daily_history, code, 2)
+        history_future = pool.submit(stock_data.get_daily_history, code, 1)
         news_future = pool.submit(news.get_headlines, f"{code} {quote['name']}", 2)
         inst = inst_future.result()
         history = history_future.result()

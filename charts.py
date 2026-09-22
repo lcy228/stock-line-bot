@@ -80,7 +80,7 @@ def generate_change_chart(stock_rows: list[dict], title: str = "Change %") -> st
 
 
 def generate_price_trend_chart(code: str, name: str, history: list[dict], quote: dict) -> str | None:
-    """聊天室即時查詢用：畫一張乾淨的近三月股價走勢圖（只有一條線，不是
+    """聊天室即時查詢用：畫一張乾淨的近一個月股價走勢圖（只有一條線，不是
     資訊卡），字體和圖片都刻意放大，避免在手機上看起來模糊或字太小。
     history 沒資料（例如上櫃股票查不到日線）就回傳 None，呼叫端不附圖即可。"""
     dates, closes = [], []
@@ -91,6 +91,13 @@ def generate_price_trend_chart(code: str, name: str, history: list[dict], quote:
             closes.append(h["close"])
     if len(dates) < 2:
         return None
+
+    # history 拿到的可能不只一個月（呼叫端為了保證資料夠多可能抓兩個月），
+    # 這裡只留最近 30 天，圖表才是「近一個月」而不是全部都畫出來。
+    cutoff = datetime.date.today() - datetime.timedelta(days=30)
+    trimmed = [(d, c) for d, c in zip(dates, closes) if d >= cutoff]
+    if len(trimmed) >= 2:
+        dates, closes = (list(t) for t in zip(*trimmed))
 
     # 日線資料是收盤價，盤中查詢時「今天」還沒收盤、不會在裡面，會導致圖表
     # 最後一點跟文字訊息回報的即時股價對不起來；今天還沒收盤就把即時價格
@@ -115,7 +122,7 @@ def generate_price_trend_chart(code: str, name: str, history: list[dict], quote:
         fontsize=20, fontweight="bold", color=line_color,
     )
 
-    ax.set_title(f"{code}　{name}　近三月股價", fontsize=24, pad=18, color=_INK_900, loc="left")
+    ax.set_title(f"{code}　{name}　近一月股價", fontsize=24, pad=18, color=_INK_900, loc="left")
     ax.grid(axis="y", color=_BORDER, linewidth=0.8)
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.spines["bottom"].set_color(_BORDER)
