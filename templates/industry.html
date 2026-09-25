@@ -29,11 +29,16 @@
   }
   .bubble {
     position: absolute; top: 0; left: 0; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     transition: box-shadow .15s;
     will-change: transform;
   }
   .bubble:hover { box-shadow: 0 0 0 3px var(--accent-soft-strong); z-index: 2; }
+  .bubble-label {
+    pointer-events: none; font-weight: 700; text-align: center; line-height: 1.15;
+    padding: 0 3px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  }
 
   .bubble-tooltip {
     position: fixed; display: none; pointer-events: none; z-index: 50;
@@ -67,6 +72,15 @@
     el.style.width = d.size + "px";
     el.style.height = d.size + "px";
     el.style.background = d.color;
+
+    const label = document.createElement("span");
+    label.className = "bubble-label";
+    label.textContent = d.name;
+    label.style.color = d.text_color;
+    // 字體大小跟著泡泡半徑走，泡泡越大字越大，太小的泡泡至少留 9px 還看得清楚。
+    label.style.fontSize = Math.max(9, Math.min(15, d.r * 0.42)) + "px";
+    el.appendChild(label);
+
     field.appendChild(el);
 
     el.addEventListener("mouseenter", () => {

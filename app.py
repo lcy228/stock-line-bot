@@ -278,15 +278,18 @@ def industry_page(code):
     for r in rows:
         net = r.pop("net")
         if not net:
-            r["size"] = 18
+            # 泡泡上要顯示股票名稱，所以最小尺寸也留大一點空間放文字。
+            r["size"] = 34
             r["color"] = "var(--border)"
+            r["text_color"] = "var(--ink-700)"
             r["net_label"] = "查無最新法人資料"
         else:
             # 開根號讓「面積」比較符合直覺的比例，而不是半徑直接線性對應金額
             # （不然一檔股票買超是另一檔的 4 倍，圓圈半徑看起來會差到 4 倍、面積差 16 倍，太誇張）。
             ratio = (abs(net) / max_abs) ** 0.5
-            r["size"] = round(18 + ratio * 46)
+            r["size"] = round(34 + ratio * 50)
             r["color"] = "var(--gain)" if net > 0 else "var(--loss)"
+            r["text_color"] = "#fff"
             label = "買超" if net > 0 else "賣超"
             r["net_label"] = f"外資{label} {abs(net) / 1000:,.0f} 張"
 
