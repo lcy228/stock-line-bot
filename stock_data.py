@@ -217,3 +217,31 @@ def parse_roc_date(s: str) -> datetime.date | None:
         return datetime.date(int(y) + 1911, int(m), int(d))
     except (ValueError, AttributeError):
         return None
+
+
+def recent_price_series(history: list[dict], quote: dict, days: int = 30) -> tuple[list[datetime.date], list[float]]:
+    """把 get_daily_history() 的原始資料，轉成「最近 N 天」的 (日期, 收盤價) 序列，
+    LINE 走勢圖（charts.py）跟網站走勢圖（app.py）共用同一份邏輯，畫出來的圖表
+    範圍才會一致。
+
+    盤中查詢時「今天」還沒收盤、不會在日線資料裡，會導致圖表最後一點跟即時股價
+    對不起來；今天還沒收盤就把即時價格補成最後一點，讓圖表跟文字看到的現價一致。
+    """
+    dates, closes = [], []
+    for h in history:
+        d = parse_roc_date(h["date"])
+        if d:
+            dates.append(d)
+            closes.append(h["close"])
+
+    cutoff = datetime.date.today() - datetime.timedelta(days=days)
+    trimmed = [(d, c) for d, c in zip(dates, closes) if d >= cutoff]
+    if len(trimmed) >= 2:
+        dates, closes = (list(t) for t in zip(*trimmed))
+
+    today = datetime.date.today()
+    if (not dates or dates[-1] < today) and quote.get("price") is not None:
+        dates.append(today)
+        closes.append(quote["price"])
+
+    return dates, closes

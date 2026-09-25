@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}股市戰情室{% endblock %}</title>
+<style>
+  :root {
+    --paper: #f3f4ef;
+    --card: #fdfdfb;
+    --ink-900: #1b2420;
+    --ink-700: #3f4a44;
+    --ink-500: #6b756e;
+    --border: #dcded4;
+    --border-soft: #e7e8e0;
+    --accent: #96631d;
+    --accent-soft: rgba(150, 99, 29, 0.14);
+    --accent-soft-strong: rgba(150, 99, 29, 0.28);
+    --gain: #c43d2b;
+    --gain-soft: rgba(196, 61, 43, 0.12);
+    --loss: #04886f;
+    --loss-soft: rgba(4, 136, 111, 0.12);
+    --shadow: 0 1px 2px rgba(27, 36, 32, 0.06), 0 8px 24px rgba(27, 36, 32, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #121613; --card: #191e1a; --ink-900: #e9ebe4; --ink-700: #b6bcb3; --ink-500: #838d84;
+      --border: #2b322c; --border-soft: #232823; --accent: #d3a75b;
+      --accent-soft: rgba(211, 167, 91, 0.16); --accent-soft-strong: rgba(211, 167, 91, 0.3);
+      --gain: #e2523f; --gain-soft: rgba(226, 82, 63, 0.16);
+      --loss: #14a38c; --loss-soft: rgba(20, 163, 140, 0.16);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink-900);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.6;
+  }
+  a { color: inherit; text-decoration: none; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 20px 16px 64px; }
+
+  header.site { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  header.site .brand { font-weight: 800; font-size: 18px; }
+  header.site .brand .eyebrow { display: block; font-size: 11px; letter-spacing: .1em; color: var(--accent); text-transform: uppercase; font-weight: 700; }
+  header.site nav { margin-left: auto; font-size: 13px; color: var(--ink-500); }
+
+  .searchbar { display: flex; gap: 8px; margin: 18px 0 22px; }
+  .searchbar input {
+    flex: 1; font-size: 16px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--card); color: var(--ink-900);
+  }
+  .searchbar button {
+    font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 10px;
+    border: none; background: var(--ink-900); color: var(--paper); cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) { .searchbar button { background: var(--accent); color: var(--ink-900); } }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .chip {
+    font-size: 13px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); color: var(--ink-700);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip .code { color: var(--ink-500); margin-right: 4px; }
+
+  section.block { margin: 30px 0; }
+  .block-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .block-head h1, .block-head h2 { font-size: 20px; font-weight: 800; margin: 0; }
+  .block-head .note { font-size: 12.5px; color: var(--ink-500); }
+  .back-link { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 14px; display: inline-block; }
+
+  footer.disclaimer {
+    max-width: 900px; margin: 40px auto 0; padding: 18px 16px 0; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--ink-500);
+  }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="/"><span class="eyebrow">股市戰情室</span>個股查詢</a>
+  <nav><a href="/">首頁</a></nav>
+</header>
+<div class="wrap">
+{% block content %}{% endblock %}
+</div>
+<footer class="disclaimer">
+  <p>資料來源：證交所／櫃買中心公開 API（股價、三大法人買賣超）與 Google 新聞，僅供參考，不構成投資建議。</p>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

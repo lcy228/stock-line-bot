@@ -6,7 +6,6 @@ Render 免費方案的硬碟是暫存性質，重啟會清空，所以檔案不�
 """
 from __future__ import annotations
 
-import datetime
 import os
 import uuid
 from collections import OrderedDict
@@ -83,29 +82,9 @@ def generate_price_trend_chart(code: str, name: str, history: list[dict], quote:
     """聊天室即時查詢用：畫一張乾淨的近一個月股價走勢圖（只有一條線，不是
     資訊卡），字體和圖片都刻意放大，避免在手機上看起來模糊或字太小。
     history 沒資料（例如上櫃股票查不到日線）就回傳 None，呼叫端不附圖即可。"""
-    dates, closes = [], []
-    for h in history:
-        d = stock_data.parse_roc_date(h["date"])
-        if d:
-            dates.append(d)
-            closes.append(h["close"])
+    dates, closes = stock_data.recent_price_series(history, quote, days=30)
     if len(dates) < 2:
         return None
-
-    # history 拿到的可能不只一個月（呼叫端為了保證資料夠多可能抓兩個月），
-    # 這裡只留最近 30 天，圖表才是「近一個月」而不是全部都畫出來。
-    cutoff = datetime.date.today() - datetime.timedelta(days=30)
-    trimmed = [(d, c) for d, c in zip(dates, closes) if d >= cutoff]
-    if len(trimmed) >= 2:
-        dates, closes = (list(t) for t in zip(*trimmed))
-
-    # 日線資料是收盤價，盤中查詢時「今天」還沒收盤、不會在裡面，會導致圖表
-    # 最後一點跟文字訊息回報的即時股價對不起來；今天還沒收盤就把即時價格
-    # 補成最後一點，讓圖表跟文字看到的現價一致。
-    today = datetime.date.today()
-    if dates[-1] < today and quote.get("price") is not None:
-        dates.append(today)
-        closes.append(quote["price"])
 
     line_color = _GAIN if quote.get("change_pct", 0) >= 0 else _LOSS
 

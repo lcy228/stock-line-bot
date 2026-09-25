@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ industry_name }}・股市戰情室{% endblock %}
+{% block content %}
+
+<a class="back-link" href="/">← 回首頁</a>
+<div class="block-head"><h1>{{ industry_name }}</h1><span class="note">{{ companies|length }} 檔・圓圈大小＝外資買賣超力道，紅色買超／綠色賣超</span></div>
+
+<div class="legend">
+  <span><i class="dot" style="background:var(--gain);width:22px;height:22px"></i> 買超（大＝買得多）</span>
+  <span><i class="dot" style="background:var(--loss);width:22px;height:22px"></i> 賣超（大＝賣得多）</span>
+  <span><i class="dot" style="background:var(--border);width:14px;height:14px"></i> 查無資料</span>
+</div>
+
+<div class="bubblegrid">
+  {% for c in companies %}
+  <a class="bubble-card" href="/stock/{{ c.code }}">
+    <span class="dot" style="width:{{ c.size }}px;height:{{ c.size }}px;background:{{ c.color }}"></span>
+    <span class="bubble-name">{{ c.name }}</span>
+    <span class="bubble-code mono">{{ c.code }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+{% endblock %}
+{% block head %}
+<style>
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-500); margin-bottom: 18px; }
+  .legend .dot { display: inline-block; border-radius: 50%; vertical-align: -6px; margin-right: 4px; }
+  .bubblegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+  .bubble-card {
+    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 8px;
+  }
+  .bubble-card:hover { border-color: var(--accent); }
+  .dot { border-radius: 50%; flex-shrink: 0; }
+  .bubble-name { font-size: 12.5px; font-weight: 700; color: var(--ink-900); }
+  .bubble-code { font-size: 10.5px; color: var(--ink-500); }
+</style>
+{% endblock %}

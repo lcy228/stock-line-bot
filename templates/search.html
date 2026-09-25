@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}搜尋「{{ q }}」・股市戰情室{% endblock %}
+{% block content %}
+
+<a class="back-link" href="/">← 回首頁</a>
+<div class="block-head"><h1>搜尋「{{ q }}」</h1></div>
+
+{% if results %}
+<div class="chips">
+  {% for code, name in results %}
+  <a class="chip" href="/stock/{{ code }}"><span class="code mono">{{ code }}</span>{{ name }}</a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="note">查不到符合的股票，確認一下代號或名稱有沒有打對。</p>
+{% endif %}
+
+{% endblock %}

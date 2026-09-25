@@ -6,15 +6,19 @@
                              已經關閉，這個路由保留給之後想手動補推播時用，平常不會自動跑）
 - POST /webhook             LINE 官方帳號的 Webhook：你在聊天室打股票代號或名稱，
                              就查即時股價、三大法人買賣超、最近新聞，簡短回覆文字，
-                             附上一張近三月走勢圖（資料都來自公開 API，不靠 AI 現場查證）
+                             附上一張近一月走勢圖（資料都來自公開 API，不靠 AI 現場查證）
 - GET  /charts/<filename>   讓 LINE 抓取產生好的圖表圖片
+- GET  /                    網站首頁：依產業分類的股票格子＋搜尋
+- GET  /search              搜尋股票代號／名稱
+- GET  /industry/<code>     某產業分類底下的個股（圓圈大小＝外資買賣超力道）
+- GET  /stock/<code>        個股頁面：股價、法人、互動走勢圖、新聞（點開不跳頁）
 """
 import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
 from datetime import datetime, timezone, timedelta
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect
 
 import config
 import stock_data
@@ -23,6 +27,7 @@ import ai_analysis
 import charts
 import report_image
 import line_service
+import industries
 
 app = Flask(__name__)
 
@@ -221,6 +226,88 @@ def webhook():
             if reply_token:
                 line_service.reply_text(reply_token, f"抱歉，查詢時發生問題：{e}")
     return jsonify({"status": "ok"})
+
+
+# ============ 網站：依產業分類點選查股票 ============
+
+def _size_class(count: int, max_count: int) -> str:
+    """依公司數量決定首頁格子大小，數量越多格子越大（面積不是真的按比例算，
+    分成四級比較好維護、螢幕小的時候版面也比較不會亂）。"""
+    ratio = count / max_count if max_count else 0
+    if ratio >= 0.6:
+        return "xl"
+    if ratio >= 0.35:
+        return "lg"
+    if ratio >= 0.15:
+        return "md"
+    return "sm"
+
+
+@app.get("/")
+def home():
+    industry_list = industries.list_industries()
+    max_count = max((it["count"] for it in industry_list), default=1)
+    for it in industry_list:
+        it["size"] = _size_class(it["count"], max_count)
+    return render_template("home.html", holdings=config.HOLDING_CODES_NAMES, industries=industry_list)
+
+
+@app.get("/search")
+def search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return redirect("/")
+    results = industries.search_companies(q)
+    if len(results) == 1:
+        return redirect(f"/stock/{results[0][0]}")
+    return render_template("search.html", q=q, results=results)
+
+
+@app.get("/industry/<code>")
+def industry_page(code):
+    companies = industries.get_industry_companies(code)
+    industry_name = industries.get_industry_name(code)
+
+    rows = []
+    for stock_code, name in companies:
+        inst = stock_data.get_institutional_trading(stock_code)
+        rows.append({"code": stock_code, "name": name, "net": inst["foreign_net"] if inst else None})
+
+    magnitudes = [abs(r["net"]) for r in rows if r["net"]]
+    max_abs = max(magnitudes) if magnitudes else 1
+    for r in rows:
+        net = r.pop("net")
+        if not net:
+            r["size"] = 14
+            r["color"] = "var(--border)"
+        else:
+            # 開根號讓「面積」比較符合直覺的比例，而不是半徑直接線性對應金額
+            # （不然一檔股票買超是另一檔的 4 倍，圓圈半徑看起來會差到 4 倍、面積差 16 倍，太誇張）。
+            ratio = (abs(net) / max_abs) ** 0.5
+            r["size"] = round(14 + ratio * 34)
+            r["color"] = "var(--gain)" if net > 0 else "var(--loss)"
+
+    return render_template("industry.html", industry_name=industry_name, companies=rows)
+
+
+@app.get("/stock/<code>")
+def stock_page(code):
+    quote = stock_data.get_realtime_quote(code)
+    if not quote:
+        return render_template("search.html", q=code, results=[]), 404
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        inst_future = pool.submit(stock_data.get_institutional_trading, code)
+        history_future = pool.submit(stock_data.get_daily_history, code, 1)
+        news_future = pool.submit(news.get_headlines, f"{code} {quote['name']}", 5)
+        inst = inst_future.result()
+        history = history_future.result()
+        headlines = news_future.result()
+
+    dates, closes = stock_data.recent_price_series(history, quote, days=30)
+    chart_data = {"labels": [d.strftime("%m/%d") for d in dates], "closes": closes}
+
+    return render_template("stock.html", quote=quote, inst=inst, news=headlines, chart_data=chart_data)
 
 
 if __name__ == "__main__":

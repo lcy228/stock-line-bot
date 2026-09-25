@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}股市戰情室・首頁{% endblock %}
+{% block content %}
+
+<form class="searchbar" action="/search" method="get">
+  <input type="text" name="q" placeholder="打股票代號或名稱，例如 2330 或 台積電" autocomplete="off" required>
+  <button type="submit">查詢</button>
+</form>
+
+<section class="block">
+  <div class="block-head"><h2>我的持股</h2><span class="note">點一下直接看個股</span></div>
+  <div class="chips">
+    {% for code, name in holdings %}
+    <a class="chip" href="/stock/{{ code }}"><span class="code mono">{{ code }}</span>{{ name }}</a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="block">
+  <div class="block-head"><h2>依產業分類</h2><span class="note">格子大小＝該產業掛牌公司數量，點進去看個股</span></div>
+  <div class="tilegrid">
+    {% for it in industries %}
+    <a class="tile size-{{ it.size }}" href="/industry/{{ it.code }}">
+      <span class="tile-name">{{ it.name }}</span>
+      <span class="tile-count mono">{{ it.count }} 檔</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+{% endblock %}
+{% block head %}
+<style>
+  .tilegrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .tile {
+    display: flex; flex-direction: column; justify-content: space-between;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; min-height: 64px; transition: border-color .15s, transform .15s;
+  }
+  .tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .tile-name { font-weight: 700; font-size: 13.5px; color: var(--ink-900); }
+  .tile-count { font-size: 11px; color: var(--ink-500); margin-top: 6px; }
+
+  .tile.size-xl { grid-column: span 3; min-height: 108px; }
+  .tile.size-xl .tile-name { font-size: 18px; }
+  .tile.size-lg { grid-column: span 2; min-height: 92px; }
+  .tile.size-lg .tile-name { font-size: 15.5px; }
+  .tile.size-md { grid-column: span 2; min-height: 72px; }
+  .tile.size-sm { grid-column: span 1; }
+
+  @media (max-width: 640px) {
+    .tilegrid { grid-template-columns: repeat(2, 1fr); }
+    .tile.size-xl, .tile.size-lg, .tile.size-md { grid-column: span 2; }
+  }
+</style>
+{% endblock %}

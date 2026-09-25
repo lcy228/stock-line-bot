@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ quote.code }} {{ quote.name }}・股市戰情室{% endblock %}
+{% block content %}
+
+<a class="back-link" href="javascript:history.back()">← 返回</a>
+
+<div class="stockhead">
+  <div>
+    <span class="ticker mono">{{ quote.code }}</span>
+    <h1>{{ quote.name }}</h1>
+  </div>
+  <div class="price-block">
+    <span class="price mono">{{ "%g"|format(quote.price) }}</span>
+    <span class="change mono {{ 'gain' if quote.change_pct >= 0 else 'loss' }}">{{ "%+.2f"|format(quote.change_pct) }}%</span>
+  </div>
+</div>
+
+<div class="stats">
+  {% if inst %}
+  <div class="stat">
+    <div class="label">外資買賣超</div>
+    <div class="value mono {{ 'gain' if inst.foreign_net >= 0 else 'loss' }}">{{ "{:+,.0f}".format(inst.foreign_net / 1000) }} 張</div>
+  </div>
+  <div class="stat">
+    <div class="label">三大法人合計</div>
+    <div class="value mono {{ 'gain' if inst.total_net >= 0 else 'loss' }}">{{ "{:+,.0f}".format(inst.total_net / 1000) }} 張</div>
+  </div>
+  <div class="stat"><div class="label">資料日期</div><div class="value mono">{{ inst.date }}</div></div>
+  {% else %}
+  <div class="stat wide"><div class="label">外資買賣超</div><div class="value">查無最新資料</div></div>
+  {% endif %}
+</div>
+
+<section class="block">
+  <div class="block-head"><h2>近一個月走勢</h2></div>
+  <div class="chart-card"><canvas id="priceChart" height="260"></canvas></div>
+</section>
+
+<section class="block">
+  <div class="block-head"><h2>最近新聞</h2><span class="note">點標題展開，不用跳頁</span></div>
+  {% if news %}
+  <div class="newslist">
+    {% for n in news %}
+    <div class="news-item">
+      <button class="news-title" onclick="this.parentElement.classList.toggle('open')">{{ n.title }}</button>
+      <div class="news-body">
+        <p>{{ n.source }}{% if n.pub_date %}・{{ n.pub_date }}{% endif %}</p>
+        <a href="{{ n.link }}" target="_blank" rel="noopener">看原文 →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="note">目前查無相關新聞。</p>
+  {% endif %}
+</section>
+
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  .stockhead { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin: 6px 0 18px; }
+  .ticker { font-size: 13px; background: var(--accent-soft); color: var(--accent); padding: 3px 9px; border-radius: 6px; font-weight: 700; }
+  .stockhead h1 { margin: 4px 0 0; font-size: 26px; }
+  .price-block { text-align: right; }
+  .price { font-size: 32px; font-weight: 800; }
+  .change { display: block; font-size: 16px; font-weight: 700; }
+  .change.gain { color: var(--gain); }
+  .change.loss { color: var(--loss); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+  .stat { background: var(--card); padding: 14px 16px; }
+  .stat .label { font-size: 12px; color: var(--ink-500); margin-bottom: 6px; }
+  .stat .value { font-size: 18px; font-weight: 700; }
+  .stat .value.gain { color: var(--gain); }
+  .stat .value.loss { color: var(--loss); }
+
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+
+  .newslist { display: flex; flex-direction: column; gap: 8px; }
+  .news-item { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .news-title {
+    display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    padding: 13px 16px; font-size: 14.5px; font-weight: 600; color: var(--ink-900); font-family: inherit;
+  }
+  .news-body { display: none; padding: 0 16px 14px; font-size: 13px; color: var(--ink-500); }
+  .news-body a { color: var(--accent); font-weight: 600; }
+  .news-item.open .news-body { display: block; }
+  .news-item.open .news-title { color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const chartData = {{ chart_data|tojson }};
+  const changePct = {{ quote.change_pct }};
+  const lineColor = changePct >= 0 ? "#c43d2b" : "#04886f";
+  const ctx = document.getElementById("priceChart");
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: chartData.labels,
+      datasets: [{
+        data: chartData.closes,
+        borderColor: lineColor,
+        backgroundColor: lineColor + "1a",
+        borderWidth: 2.5,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        tension: 0.15,
+        fill: true,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: "#6b756e" } },
+        y: { grid: { color: "#dcded4" }, ticks: { color: "#6b756e" } },
+      },
+    },
+  });
+</script>
+{% endblock %}
