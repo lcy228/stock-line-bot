@@ -23,7 +23,7 @@
   .legend .dot { display: inline-block; border-radius: 50%; vertical-align: -5px; margin-right: 4px; }
 
   .bubble-field {
-    position: relative; width: 100%; height: 68vh; min-height: 420px; max-height: 760px;
+    position: relative; width: 100%; min-height: 420px;
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
     overflow: hidden; cursor: default;
   }
@@ -56,7 +56,13 @@
   const field = document.getElementById("bubbleField");
   const tooltip = document.getElementById("bubbleTooltip");
   const width = field.clientWidth;
-  const height = field.clientHeight;
+
+  // 場地高度不能寫死：手機螢幕窄，同樣多檔股票要展開的話需要的高度比桌機多很多，
+  // 寫死高度（例如固定 68vh）在股票很多的產業（例如 200 多檔）會擠成一團。
+  // 用「所有泡泡面積總和」反推需要多高，泡泡才有空間飄、不會疊在一起。
+  const totalArea = raw.reduce((sum, d) => sum + Math.PI * (d.size / 2) ** 2, 0);
+  const height = Math.max(420, Math.round((totalArea * 1.7) / width));
+  field.style.height = height + "px";
 
   const nodes = raw.map(d => ({
     ...d,
