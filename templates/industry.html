@@ -3,37 +3,108 @@
 {% block content %}
 
 <a class="back-link" href="/">← 回首頁</a>
-<div class="block-head"><h1>{{ industry_name }}</h1><span class="note">{{ companies|length }} 檔・圓圈大小＝外資買賣超力道，紅色買超／綠色賣超</span></div>
+<div class="block-head"><h1>{{ industry_name }}</h1><span class="note">{{ companies|length }} 檔・圓圈大小＝外資買賣超力道，紅色買超／綠色賣超・滑鼠移過去看內容，點一下看個股</span></div>
 
 <div class="legend">
-  <span><i class="dot" style="background:var(--gain);width:22px;height:22px"></i> 買超（大＝買得多）</span>
-  <span><i class="dot" style="background:var(--loss);width:22px;height:22px"></i> 賣超（大＝賣得多）</span>
-  <span><i class="dot" style="background:var(--border);width:14px;height:14px"></i> 查無資料</span>
+  <span><i class="dot" style="background:var(--gain);width:20px;height:20px"></i> 買超（大＝買得多）</span>
+  <span><i class="dot" style="background:var(--loss);width:20px;height:20px"></i> 賣超（大＝賣得多）</span>
+  <span><i class="dot" style="background:var(--border);width:12px;height:12px"></i> 查無資料</span>
 </div>
 
-<div class="bubblegrid">
-  {% for c in companies %}
-  <a class="bubble-card" href="/stock/{{ c.code }}">
-    <span class="dot" style="width:{{ c.size }}px;height:{{ c.size }}px;background:{{ c.color }}"></span>
-    <span class="bubble-name">{{ c.name }}</span>
-    <span class="bubble-code mono">{{ c.code }}</span>
-  </a>
-  {% endfor %}
-</div>
+<div id="bubbleField" class="bubble-field"></div>
+<div id="bubbleTooltip" class="bubble-tooltip"></div>
 
 {% endblock %}
+
 {% block head %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <style>
-  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-500); margin-bottom: 18px; }
-  .legend .dot { display: inline-block; border-radius: 50%; vertical-align: -6px; margin-right: 4px; }
-  .bubblegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
-  .bubble-card {
-    display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 8px;
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-500); margin-bottom: 14px; }
+  .legend .dot { display: inline-block; border-radius: 50%; vertical-align: -5px; margin-right: 4px; }
+
+  .bubble-field {
+    position: relative; width: 100%; height: 68vh; min-height: 420px; max-height: 760px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden; cursor: default;
   }
-  .bubble-card:hover { border-color: var(--accent); }
-  .dot { border-radius: 50%; flex-shrink: 0; }
-  .bubble-name { font-size: 12.5px; font-weight: 700; color: var(--ink-900); }
-  .bubble-code { font-size: 10.5px; color: var(--ink-500); }
+  .bubble {
+    position: absolute; top: 0; left: 0; border-radius: 50%; cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    transition: box-shadow .15s;
+    will-change: transform;
+  }
+  .bubble:hover { box-shadow: 0 0 0 3px var(--accent-soft-strong); z-index: 2; }
+
+  .bubble-tooltip {
+    position: fixed; display: none; pointer-events: none; z-index: 50;
+    background: var(--ink-900); color: var(--paper); font-size: 13px;
+    padding: 8px 12px; border-radius: 8px; box-shadow: var(--shadow); max-width: 220px;
+  }
+  .bubble-tooltip strong { display: block; margin-bottom: 2px; font-size: 13.5px; }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const raw = {{ companies|tojson }};
+  const field = document.getElementById("bubbleField");
+  const tooltip = document.getElementById("bubbleTooltip");
+  const width = field.clientWidth;
+  const height = field.clientHeight;
+
+  const nodes = raw.map(d => ({
+    ...d,
+    r: d.size / 2,
+    x: Math.random() * width,
+    y: Math.random() * height,
+    vx: 0, vy: 0,
+  }));
+
+  const els = nodes.map(d => {
+    const el = document.createElement("div");
+    el.className = "bubble";
+    el.style.width = d.size + "px";
+    el.style.height = d.size + "px";
+    el.style.background = d.color;
+    field.appendChild(el);
+
+    el.addEventListener("mouseenter", () => {
+      tooltip.innerHTML = `<strong>${d.code} ${d.name}</strong>${d.net_label}`;
+      tooltip.style.display = "block";
+    });
+    el.addEventListener("mousemove", (e) => {
+      tooltip.style.left = (e.clientX + 16) + "px";
+      tooltip.style.top = (e.clientY + 16) + "px";
+    });
+    el.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+    el.addEventListener("click", () => { window.location.href = "/stock/" + d.code; });
+    return el;
+  });
+
+  // 像泡泡一樣飄來飄去：用 d3-force 做碰撞不重疊，alphaDecay(0) 讓模擬永遠不停，
+  // 每一格再加一點隨機的力，飄動才不會愈來愈慢最後靜止不動。
+  const simulation = d3.forceSimulation(nodes)
+    .force("x", d3.forceX(width / 2).strength(0.008))
+    .force("y", d3.forceY(height / 2).strength(0.008))
+    .force("collide", d3.forceCollide(d => d.r + 2).iterations(2))
+    .alphaDecay(0)
+    .alphaMin(-1)
+    .velocityDecay(0.22)
+    .on("tick", ticked);
+
+  function ticked() {
+    for (const d of nodes) {
+      d.vx += (Math.random() - 0.5) * 0.05;
+      d.vy += (Math.random() - 0.5) * 0.05;
+      d.x = Math.max(d.r, Math.min(width - d.r, d.x));
+      d.y = Math.max(d.r, Math.min(height - d.r, d.y));
+    }
+    els.forEach((el, i) => {
+      const d = nodes[i];
+      el.style.transform = `translate(${d.x - d.r}px, ${d.y - d.r}px)`;
+    });
+  }
+})();
+</script>
 {% endblock %}

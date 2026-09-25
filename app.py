@@ -278,14 +278,17 @@ def industry_page(code):
     for r in rows:
         net = r.pop("net")
         if not net:
-            r["size"] = 14
+            r["size"] = 18
             r["color"] = "var(--border)"
+            r["net_label"] = "查無最新法人資料"
         else:
             # 開根號讓「面積」比較符合直覺的比例，而不是半徑直接線性對應金額
             # （不然一檔股票買超是另一檔的 4 倍，圓圈半徑看起來會差到 4 倍、面積差 16 倍，太誇張）。
             ratio = (abs(net) / max_abs) ** 0.5
-            r["size"] = round(14 + ratio * 34)
+            r["size"] = round(18 + ratio * 46)
             r["color"] = "var(--gain)" if net > 0 else "var(--loss)"
+            label = "買超" if net > 0 else "賣超"
+            r["net_label"] = f"外資{label} {abs(net) / 1000:,.0f} 張"
 
     return render_template("industry.html", industry_name=industry_name, companies=rows)
 
